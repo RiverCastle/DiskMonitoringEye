@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Server Monitor Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .arc-transition { transition: stroke-dashoffset 0.8s ease, stroke 0.5s ease; }
+        .bar-transition  { transition: width 0.7s ease, background-color 0.4s ease; }
+        .card-transition { transition: background-color 0.4s ease, border-color 0.4s ease; }
+    </style>
+</head>
+<body class="bg-gray-950 text-white min-h-screen font-sans">
+<div class="max-w-4xl mx-auto px-6 py-10">
+
+    <!-- ── 헤더 ── -->
+    <div class="flex items-center justify-between mb-8">
+        <div>
+            <h1 class="text-2xl font-bold tracking-tight">🖥️ Server Monitor Dashboard</h1>
+            <p class="text-gray-500 text-sm mt-1">종합 서버 리소스 실시간 모니터링</p>
+        </div>
+        <button id="refresh-btn" onclick="manualRefresh()"
+                class="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700
+                       border border-gray-700 text-sm font-medium text-gray-300 hover:text-white
+                       card-transition disabled:opacity-40 disabled:cursor-not-allowed">
+            <svg id="refresh-icon" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0
+                         0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            <span id="refresh-label">지금 갱신</span>
+        </button>
+    </div>
+
+    <!-- ── OS 배지 · 마지막 갱신 ── -->
+    <div class="flex items-center justify-between mb-6">
+        <span id="os-badge" class="bg-gray-800 text-gray-300 text-xs font-mono px-3 py-1 rounded-full border border-gray-700">
+            로딩 중...
+        </span>
+        <div class="text-right">
+            <p class="text-gray-500 text-xs">마지막 갱신</p>
+            <p id="last-updated" class="text-gray-300 text-sm font-mono">--</p>
+        </div>
+    </div>
+
+    <!-- ── 1행: 드라이브 목록 (동적 그리드) ── -->
+    <div class="mb-5">
+        <p class="text-xs text-gray-500 font-semibold uppercase tracking-widest mb-3">💽 Disk Drives</p>
+        <div id="drives-container" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <!-- 드라이브 카드 동적 삽입 -->
+            <div class="bg-gray-900 rounded-2xl border border-gray-800 p-5 animate-pulse">
+                <div class="h-4 bg-gray-700 rounded w-1/2 mb-4"></div>
+                <div class="h-2 bg-gray-700 rounded mb-3"></div>
+                <div class="grid grid-cols-3 gap-2">
+                    <div class="h-8 bg-gray-700 rounded"></div>
+                    <div class="h-8 bg-gray-700 rounded"></div>
+                    <div class="h-8 bg-gray-700 rounded"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 2행: CPU | 메모리 ── -->
+    <div class="grid md:grid-cols-2 gap-5 mb-5">
+
+        <!-- CPU 카드 -->
+        <div id="cpu-card" class="bg-gray-900 rounded-2xl border border-gray-800 p-6 card-transition">
+            <p class="text-xs text-gray-500 font-semibold uppercase tracking-widest mb-4">⚡ CPU</p>
+            <div class="flex items-end gap-3 mb-4">
+                <span id="cpu-pct" class="text-5xl font-bold leading-none">--</span>
+                <span class="text-gray-400 text-xl mb-1">%</span>
+            </div>
+            <div class="w-full bg-gray-800 rounded-full h-3 overflow-hidden">
+                <div id="cpu-bar" class="h-3 rounded-full bar-transition" style="width:0%; background-color:#10b981;"></div>
+            </div>
+            <p id="cpu-status" class="text-gray-500 text-xs mt-2">--</p>
+        </div>
+
+        <!-- 메모리 카드 -->
+        <div id="memory-card" class="bg-gray-900 rounded-2xl border border-gray-800 p-6 card-transition">
+            <p class="text-xs text-gray-500 font-semibold uppercase tracking-widest mb-4">🧠 Memory</p>
+            <div class="flex items-end gap-3 mb-3">
+                <span id="mem-pct" class="text-5xl font-bold leading-none">--</span>
+                <span class="text-gray-400 text-xl mb-1">%</span>
+            </div>
+            <div class="w-full bg-gray-800 rounded-full h-3 overflow-hidden mb-4">
+                <div id="mem-bar" class="h-3 rounded-full bar-transition" style="width:0%; background-color:#10b981;"></div>
+            </div>
+            <div class="grid grid-cols-3 gap-2 text-center text-xs">
+                <div class="bg-gray-800 rounded-lg py-2">
+                    <p class="text-gray-400 mb-1">전체</p>
+                    <p id="mem-total" class="font-bold">--</p>
+                </div>
+                <div class="bg-gray-800 rounded-lg py-2">
+                    <p class="text-gray-400 mb-1">사용 중</p>
+                    <p id="mem-used" class="font-bold">--</p>
+                </div>
+                <div class="bg-gray-800 rounded-lg py-2">
+                    <p class="text-gray-400 mb-1">여유</p>
+                    <p id="mem-free" class="text-emerald-400 font-bold">--</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 3행: 네트워크 | 업타임 ── -->
+    <div class="grid md:grid-cols-2 gap-5 mb-5">
+        <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6">
+            <p class="text-xs text-gray-500 font-semibold uppercase tracking-widest mb-4">🌐 Network</p>
+            <p class="text-gray-400 text-sm mb-1">ESTABLISHED 연결 수</p>
+            <p id="net-connections" class="text-4xl font-bold">--</p>
+        </div>
+        <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6">
+            <p class="text-xs text-gray-500 font-semibold uppercase tracking-widest mb-4">⏱️ Uptime</p>
+            <p class="text-gray-400 text-sm mb-1">서버 가동 시간</p>
+            <p id="uptime-text" class="text-lg font-semibold break-words">--</p>
+        </div>
+    </div>
+
+    <!-- ── 경고 배너 ── -->
+    <div id="alert-banner" class="hidden mb-5 bg-red-950 border border-red-800 text-red-300 rounded-xl px-5 py-4 text-sm">
+        <div class="flex items-center gap-2 mb-2 font-semibold">
+            <span>⚠️</span><span>리소스 임계치 초과 감지</span>
+        </div>
+        <ul id="alert-list" class="list-disc list-inside space-y-1 text-red-400"></ul>
+    </div>
+
+    <!-- ── 하단 상태 바 ── -->
+    <div class="flex items-center justify-between text-xs text-gray-500">
+        <div id="status-indicator" class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-gray-600 animate-pulse"></span>
+            <span>데이터 로딩 중...</span>
+        </div>
+        <span>다음 갱신까지&nbsp;
+            <span id="countdown" class="text-gray-300 font-mono font-semibold">5:00</span>
+        </span>
+    </div>
+
+</div>
+<script>
+    const REFRESH_MS    = 300000;
+    const DISK_WARN     = 80;
+    const RESOURCE_WARN = 90;
+
+    let countdownSec = REFRESH_MS / 1000;
+
+    function colorOf(pct, warnAt = RESOURCE_WARN) {
+        if (pct >= warnAt)          return '#ef4444';
+        if (pct >= warnAt * 0.67)   return '#f59e0b';
+        return '#10b981';
+    }
+
+    function applyCardWarning(cardId, pct, warnAt) {
+        const card = document.getElementById(cardId);
+        if (pct >= warnAt) {
+            card.style.backgroundColor = 'rgba(69,10,10,0.7)';
+            card.style.borderColor     = 'rgba(185,28,28,0.7)';
+        } else {
+            card.style.backgroundColor = '';
+            card.style.borderColor     = '';
+        }
+    }
+
+    function fmtMB(mb) {
+        if (mb <= 0)    return '--';
+        if (mb >= 1024) return (mb / 1024).toFixed(1) + ' GB';
+        return mb + ' MB';
+    }
+
+    /* ── 드라이브 카드 동적 렌더링 ── */
+    function renderDrives(drives) {
+        const container = document.getElementById('drives-container');
+        if (!drives || drives.length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-sm col-span-3">드라이브 정보를 불러올 수 없습니다.</p>';
+            return;
+        }
+
+        container.innerHTML = drives.map(drive => {
+            const pct   = drive.usagePercentage;
+            const color = colorOf(pct, DISK_WARN);
+            const warnBg    = pct >= DISK_WARN ? 'rgba(69,10,10,0.6)'   : '';
+            const warnBorder= pct >= DISK_WARN ? 'rgba(185,28,28,0.6)'  : 'rgb(31,41,55)';
+
+            return `
+            <div class="rounded-2xl border p-5 card-transition"
+                 style="background-color:${warnBg || 'rgb(17,24,39)'}; border-color:${warnBorder};">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="font-mono text-sm font-bold text-gray-200">${drive.driveName}</span>
+                    <span class="text-lg font-bold" style="color:${color};">${pct.toFixed(1)}%</span>
+                </div>
+                <div class="w-full bg-gray-800 rounded-full h-2 overflow-hidden mb-3">
+                    <div class="h-2 rounded-full bar-transition"
+                         style="width:${pct}%; background-color:${color};"></div>
+                </div>
+                <div class="grid grid-cols-3 gap-2 text-xs text-center">
+                    <div>
+                        <p class="text-gray-500 mb-1">전체</p>
+                        <p class="font-medium text-gray-300">${drive.totalSpace}</p>
+                    </div>
+                    <div>
+                        <p class="text-gray-500 mb-1">사용</p>
+                        <p class="font-medium" style="color:${color};">${drive.usedSpace}</p>
+                    </div>
+                    <div>
+                        <p class="text-gray-500 mb-1">여유</p>
+                        <p class="font-medium text-emerald-400">${drive.freeSpace}</p>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    /* ── 시스템 상태 갱신 ── */
+    function updateDashboard(data) {
+        const cpuPct = data.cpu.usage;
+        const memPct = data.memory.percentage;
+
+        // CPU
+        const cpuColor = colorOf(cpuPct);
+        document.getElementById('cpu-bar').style.width           = cpuPct + '%';
+        document.getElementById('cpu-bar').style.backgroundColor = cpuColor;
+        const cpuEl = document.getElementById('cpu-pct');
+        cpuEl.textContent = cpuPct.toFixed(1);
+        cpuEl.style.color = cpuColor;
+        document.getElementById('cpu-status').textContent =
+            cpuPct >= RESOURCE_WARN ? '⚠ 경고: 임계치 초과' :
+            cpuPct >= 60            ? '주의: 부하 증가 중'  : '정상';
+        document.getElementById('cpu-status').style.color = cpuColor;
+        applyCardWarning('cpu-card', cpuPct, RESOURCE_WARN);
+
+        // Memory
+        const memColor = colorOf(memPct);
+        document.getElementById('mem-bar').style.width           = memPct + '%';
+        document.getElementById('mem-bar').style.backgroundColor = memColor;
+        const memEl = document.getElementById('mem-pct');
+        memEl.textContent = memPct.toFixed(1);
+        memEl.style.color = memColor;
+        document.getElementById('mem-total').textContent = fmtMB(data.memory.total);
+        document.getElementById('mem-used').textContent  = fmtMB(data.memory.used);
+        document.getElementById('mem-used').style.color  = memColor;
+        document.getElementById('mem-free').textContent  = fmtMB(data.memory.free);
+        applyCardWarning('memory-card', memPct, RESOURCE_WARN);
+
+        // Network / Uptime
+        document.getElementById('net-connections').textContent = data.network.activeConnections;
+        document.getElementById('uptime-text').textContent     = data.uptime;
+
+        // OS / timestamp
+        document.getElementById('os-badge').textContent     = '🖥️  ' + data.os;
+        document.getElementById('last-updated').textContent  = data.timestamp;
+
+        countdownSec = REFRESH_MS / 1000;
+    }
+
+    /* ── 경고 배너 갱신 (드라이브 + CPU + 메모리) ── */
+    function updateAlerts(drives, systemData) {
+        const alerts = [];
+
+        if (drives) {
+            drives.filter(d => d.usagePercentage >= DISK_WARN)
+                  .forEach(d => alerts.push(
+                      `디스크 ${d.driveName} 사용률 ${d.usagePercentage.toFixed(1)}% (임계치 ${DISK_WARN}% 초과)`
+                  ));
+        }
+        if (systemData) {
+            if (systemData.cpu.usage >= RESOURCE_WARN)
+                alerts.push(`CPU 사용률 ${systemData.cpu.usage.toFixed(1)}% (임계치 ${RESOURCE_WARN}% 초과)`);
+            if (systemData.memory.percentage >= RESOURCE_WARN)
+                alerts.push(`메모리 사용률 ${systemData.memory.percentage.toFixed(1)}% (임계치 ${RESOURCE_WARN}% 초과)`);
+        }
+
+        const banner = document.getElementById('alert-banner');
+        if (alerts.length > 0) {
+            document.getElementById('alert-list').innerHTML =
+                alerts.map(a => `<li>${a}</li>`).join('');
+            banner.classList.remove('hidden');
+        } else {
+            banner.classList.add('hidden');
+        }
+
+        const indicator = document.getElementById('status-indicator');
+        indicator.innerHTML = alerts.length > 0
+            ? '<span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span><span class="text-red-400 font-semibold">경고 — 임계치 초과 항목 있음</span>'
+            : '<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span><span class="text-emerald-400">모든 리소스 정상</span>';
+    }
+
+    /* ── API 호출 ── */
+    let lastDrives     = null;
+    let lastSystemData = null;
+
+    function fetchAll(onFinally) {
+        const p1 = fetch('/api/monitor/system-status')
+            .then(r => { if (!r.ok) throw new Error('system-status ' + r.status); return r.json(); })
+            .then(data => { lastSystemData = data; updateDashboard(data); });
+
+        const p2 = fetch('/api/monitor/disk/drives')
+            .then(r => { if (!r.ok) throw new Error('disk/drives ' + r.status); return r.json(); })
+            .then(drives => { lastDrives = drives; renderDrives(drives); });
+
+        Promise.allSettled([p1, p2])
+            .then(results => {
+                results.forEach(r => {
+                    if (r.status === 'rejected') console.error('API 오류:', r.reason);
+                });
+                updateAlerts(lastDrives, lastSystemData);
+            })
+            .finally(() => { if (onFinally) onFinally(); });
+    }
+
+    /* ── 수동 갱신 ── */
+    function manualRefresh() {
+        const btn   = document.getElementById('refresh-btn');
+        const icon  = document.getElementById('refresh-icon');
+        const label = document.getElementById('refresh-label');
+        btn.disabled = true;
+        icon.classList.add('animate-spin');
+        label.textContent = '갱신 중...';
+
+        fetchAll(() => {
+            icon.classList.remove('animate-spin');
+            label.textContent = '지금 갱신';
+            btn.disabled = false;
+        });
+    }
+
+    /* ── 카운트다운 ── */
+    setInterval(() => {
+        countdownSec = Math.max(0, countdownSec - 1);
+        const m = Math.floor(countdownSec / 60);
+        const s = countdownSec % 60;
+        document.getElementById('countdown').textContent = m + ':' + String(s).padStart(2, '0');
+    }, 1000);
+
+    /* ── 초기 호출 + 5분 폴링 ── */
+    fetchAll(null);
+    setInterval(() => fetchAll(null), REFRESH_MS);
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+server:
+  port: 8085
+
+# 알림 설정
+alert:
+  threshold: 80.0
+
+logging:
+  level:
+    com.monitoring.disk: INFO

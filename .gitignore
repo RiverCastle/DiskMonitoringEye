@@ -1,0 +1,59 @@
+# ===== Java =====
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+hs_err_pid*
+replay_pid*
+
+# ===== Gradle =====
+.gradle/
+build/
+!**/gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# ===== Spring Boot =====
+*.log
+logs/
+spring-shell.log
+
+# ===== IntelliJ IDEA =====
+.idea/*
+!.idea/gradle.xml
+!.idea/misc.xml
+!.idea/vcs.xml
+!.idea/.gitignore
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ===== Environment / Secrets =====
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+application-local.yml
+application-local.properties
+application-secret.yml
+application-secret.properties
+
+# ===== Claude =====
+.claude/
+
+# ===== VS Code =====
+.vscode/
