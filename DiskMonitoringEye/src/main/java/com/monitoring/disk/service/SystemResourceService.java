@@ -2,13 +2,13 @@ package com.monitoring.disk.service;
 
 import com.monitoring.disk.dto.*;
 import com.monitoring.disk.util.DiskMonitorUtil;
+import com.monitoring.disk.util.MonitoringConstants;
 import com.monitoring.disk.util.OSCommandExecutor;
 import com.monitoring.disk.util.OSCommandExecutor.OsType;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -16,9 +16,6 @@ import java.util.regex.Pattern;
 @Slf4j
 @Service
 public class SystemResourceService {
-
-    private static final DateTimeFormatter FORMATTER =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     // ----------------------------------------------------------------
     // 퍼블릭 API
@@ -41,7 +38,7 @@ public class SystemResourceService {
                 disk,
                 new NetworkInfo(activeConnections),
                 uptime,
-                LocalDateTime.now().format(FORMATTER)
+                LocalDateTime.now().format(MonitoringConstants.DATETIME_FORMATTER)
         );
     }
 
@@ -179,9 +176,9 @@ public class SystemResourceService {
         DiskRawInfo raw = DiskMonitorUtil.getDiskRawInfo();
         return new DiskInfo(
                 round1(raw.usagePercentage()),
-                formatBytes(raw.totalBytes()),
-                formatBytes(raw.usedBytes()),
-                formatBytes(raw.freeBytes())
+                DiskMonitorUtil.formatBytes(raw.totalBytes()),
+                DiskMonitorUtil.formatBytes(raw.usedBytes()),
+                DiskMonitorUtil.formatBytes(raw.freeBytes())
         );
     }
 
@@ -191,10 +188,9 @@ public class SystemResourceService {
 
     private int collectNetwork(OsType os) {
         return switch (os) {
-            case WINDOWS -> getWindowsNetwork();
-            case LINUX   -> getUnixNetwork();
-            case SOLARIS -> getUnixNetwork();
-            default      -> 0;
+            case WINDOWS         -> getWindowsNetwork();
+            case LINUX, SOLARIS  -> getUnixNetwork();
+            default              -> 0;
         };
     }
 
@@ -283,13 +279,6 @@ public class SystemResourceService {
 
     private double round1(double v) {
         return Math.round(v * 10.0) / 10.0;
-    }
-
-    private String formatBytes(long bytes) {
-        if (bytes >= 1024L * 1024 * 1024 * 1024) return String.format("%.1f TB", bytes / (1024.0 * 1024 * 1024 * 1024));
-        if (bytes >= 1024L * 1024 * 1024)         return String.format("%.1f GB", bytes / (1024.0 * 1024 * 1024));
-        if (bytes >= 1024L * 1024)                 return String.format("%.1f MB", bytes / (1024.0 * 1024));
-        return String.format("%d KB", bytes / 1024);
     }
 
     private MemoryInfo emptyMemory() { return new MemoryInfo(0, 0, 0, "MB", 0.0); }
