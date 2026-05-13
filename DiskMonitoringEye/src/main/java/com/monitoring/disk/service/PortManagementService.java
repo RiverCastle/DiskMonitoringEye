@@ -114,12 +114,25 @@ public class PortManagementService {
         return map;
     }
 
+    /**
+     * taskkill은 한국어 Windows에서 CP949로 출력하지만 OSCommandExecutor는 UTF-8로 읽기 때문에
+     * 출력 문자열이 깨져 성공/실패 판별이 불가능하다.
+     * PowerShell Stop-Process는 인코딩 문제가 없으므로 이를 사용하고,
+     * 종료 후 프로세스 존재 여부로 성공을 판별한다.
+     */
     private PortKillResult killWindows(int port, long pid) {
-        String out = OSCommandExecutor.execute("taskkill", "/PID", String.valueOf(pid), "/F");
-        boolean success = out.contains("SUCCESS") || out.contains("성공");
-        log.info("[PortKill][Windows] port={}, pid={}, result={}", port, pid, out.trim());
+        OSCommandExecutor.executePowerShell(
+                "Stop-Process -Id " + pid + " -Force -ErrorAction SilentlyContinue"
+        );
+        // 프로세스가 더 이상 존재하지 않으면 성공
+        String check = OSCommandExecutor.executePowerShell(
+                "(Get-Process -Id " + pid + " -ErrorAction SilentlyContinue | Measure-Object).Count"
+        );
+        boolean success = check.trim().equals("0") || check.isBlank();
+        log.info("[PortKill][Windows] port={}, pid={}, success={}", port, pid, success);
         return new PortKillResult(port, pid, success,
-                success ? "PID " + pid + " 프로세스가 종료되었습니다." : "종료 실패: " + out.trim());
+                success ? "PID " + pid + " 프로세스가 종료되었습니다."
+                        : "프로세스 종료에 실패했습니다. (PID " + pid + ")");
     }
 
     // ----------------------------------------------------------------
