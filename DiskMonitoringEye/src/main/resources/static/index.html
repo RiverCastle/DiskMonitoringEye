@@ -118,6 +118,47 @@
         </div>
     </div>
 
+    <!-- ── 포트 관리 ── -->
+    <div class="mb-5">
+        <div class="flex items-center justify-between mb-3">
+            <p class="text-xs text-gray-500 font-semibold uppercase tracking-widest">🔌 Port Management</p>
+            <div class="flex items-center gap-2">
+                <input id="port-search" type="text" placeholder="포트 / 프로세스 검색"
+                       oninput="filterPorts()"
+                       class="bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded-lg px-3 py-1.5
+                              placeholder-gray-600 focus:outline-none focus:border-gray-500 w-48"/>
+                <button onclick="fetchPorts()"
+                        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700
+                               border border-gray-700 text-xs font-medium text-gray-300 hover:text-white card-transition">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0
+                                 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    새로고침
+                </button>
+            </div>
+        </div>
+
+        <div class="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
+            <div class="grid grid-cols-12 gap-2 px-4 py-2 bg-gray-800/60 text-xs text-gray-500 font-semibold uppercase tracking-wider">
+                <span class="col-span-1">Proto</span>
+                <span class="col-span-2">Port</span>
+                <span class="col-span-3">Local Address</span>
+                <span class="col-span-2">State</span>
+                <span class="col-span-1">PID</span>
+                <span class="col-span-2">Process</span>
+                <span class="col-span-1 text-center">Kill</span>
+            </div>
+            <div id="port-table-body" class="divide-y divide-gray-800/50 max-h-96 overflow-y-auto">
+                <div class="flex items-center justify-center py-10 text-gray-600 text-sm">
+                    포트 목록을 불러오는 중...
+                </div>
+            </div>
+        </div>
+        <p id="port-count" class="text-xs text-gray-600 mt-2 text-right"></p>
+    </div>
+
     <!-- ── 경고 배너 ── -->
     <div id="alert-banner" class="hidden mb-5 bg-red-950 border border-red-800 text-red-300 rounded-xl px-5 py-4 text-sm">
         <div class="flex items-center gap-2 mb-2 font-semibold">
@@ -335,6 +376,95 @@
     /* ── 초기 호출 + 5분 폴링 ── */
     fetchAll(null);
     setInterval(() => fetchAll(null), REFRESH_MS);
+
+    /* ════════════════════════════════════════════
+       포트 관리
+    ════════════════════════════════════════════ */
+    let allPorts = [];
+
+    function stateColor(state) {
+        if (state === 'LISTENING') return '#10b981';   // 초록
+        if (state === 'ESTABLISHED') return '#60a5fa'; // 파랑
+        return '#9ca3af';                               // 회색
+    }
+
+    function renderPortRow(p) {
+        const color = stateColor(p.state);
+        return `
+        <div class="grid grid-cols-12 gap-2 px-4 py-2.5 text-xs hover:bg-gray-800/40 transition-colors port-row"
+             data-port="${p.localPort}" data-proc="${p.processName.toLowerCase()}">
+            <span class="col-span-1 text-gray-400 font-mono">${p.protocol}</span>
+            <span class="col-span-2 font-bold font-mono text-white">${p.localPort}</span>
+            <span class="col-span-3 text-gray-400 font-mono truncate" title="${p.localAddress}">${p.localAddress}</span>
+            <span class="col-span-2">
+                <span class="px-1.5 py-0.5 rounded text-xs font-semibold"
+                      style="color:${color}; background:${color}22;">${p.state}</span>
+            </span>
+            <span class="col-span-1 text-gray-500 font-mono">${p.pid > 0 ? p.pid : '-'}</span>
+            <span class="col-span-2 text-gray-300 truncate" title="${p.processName}">${p.processName}</span>
+            <span class="col-span-1 flex justify-center">
+                <button onclick="killPort(${p.localPort})"
+                        class="px-2 py-1 rounded bg-red-900/50 hover:bg-red-700/70 border border-red-800
+                               text-red-400 hover:text-red-200 text-xs font-semibold transition-colors"
+                        title="포트 ${p.localPort} 프로세스 종료">
+                    Kill
+                </button>
+            </span>
+        </div>`;
+    }
+
+    function renderPorts(ports) {
+        const body = document.getElementById('port-table-body');
+        if (!ports || ports.length === 0) {
+            body.innerHTML = '<div class="flex items-center justify-center py-10 text-gray-600 text-sm">활성 포트가 없습니다.</div>';
+            document.getElementById('port-count').textContent = '';
+            return;
+        }
+        body.innerHTML = ports.map(renderPortRow).join('');
+        document.getElementById('port-count').textContent = `총 ${ports.length}개 포트`;
+    }
+
+    function filterPorts() {
+        const q = document.getElementById('port-search').value.toLowerCase().trim();
+        if (!q) { renderPorts(allPorts); return; }
+        const filtered = allPorts.filter(p =>
+            String(p.localPort).includes(q) || p.processName.toLowerCase().includes(q)
+        );
+        renderPorts(filtered);
+    }
+
+    function fetchPorts() {
+        const body = document.getElementById('port-table-body');
+        body.innerHTML = '<div class="flex items-center justify-center py-10 text-gray-600 text-sm animate-pulse">포트 목록 조회 중...</div>';
+        fetch('/api/port/list')
+            .then(r => { if (!r.ok) throw new Error('port/list ' + r.status); return r.json(); })
+            .then(data => {
+                allPorts = data.sort((a, b) => a.localPort - b.localPort);
+                filterPorts();
+            })
+            .catch(e => {
+                console.error('포트 조회 실패:', e);
+                body.innerHTML = '<div class="flex items-center justify-center py-10 text-red-500 text-sm">포트 목록 조회 실패</div>';
+            });
+    }
+
+    function killPort(port) {
+        if (!confirm(`포트 ${port}를 점유 중인 프로세스를 종료하시겠습니까?`)) return;
+        fetch(`/api/port/${port}`, { method: 'DELETE' })
+            .then(r => r.json())
+            .then(result => {
+                if (result.success) {
+                    alert(`✅ 포트 ${port} (PID ${result.pid}) 종료 완료`);
+                } else {
+                    alert(`❌ 종료 실패: ${result.message}`);
+                }
+                fetchPorts(); // 목록 갱신
+            })
+            .catch(e => alert('요청 실패: ' + e.message));
+    }
+
+    /* 초기 포트 목록 로드 */
+    fetchPorts();
 </script>
 </body>
 </html>
