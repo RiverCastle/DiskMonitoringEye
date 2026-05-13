@@ -5,7 +5,6 @@ import com.monitoring.disk.dto.DriveInfo;
 import com.monitoring.disk.dto.SystemStatusDto;
 import com.monitoring.disk.service.DiskMonitorService;
 import com.monitoring.disk.service.SystemResourceService;
-import com.monitoring.disk.util.DiskMonitorUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -42,6 +41,6 @@ public class DiskMonitorController {
      */
     @GetMapping("/disk/drives")
     public ResponseEntity<List<DriveInfo>> getDriveList() {
-        return ResponseEntity.ok(DiskMonitorUtil.getAllDrives());
+        return ResponseEntity.ok(diskMonitorService.getAllDrives());
     }
 }
